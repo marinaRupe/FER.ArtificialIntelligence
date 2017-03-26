@@ -131,6 +131,7 @@ def generalSearch(problem, Container, hasPriority=False, h=None):
     visited = set()
     n = problem.getStartState(), '', 0, []
     openNodes = Container()
+
     if hasPriority:
         if h is not None:
             openNodes.push(n, cost(n) + h(state(n), problem))
