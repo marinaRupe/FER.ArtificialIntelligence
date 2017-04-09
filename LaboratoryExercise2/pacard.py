@@ -108,6 +108,7 @@ def logicBasedSearch(problem):
     ####################################
     """
     knowledgeBase = dict()
+    safeStatesContainer = set()
     safeStates = set()
     notSafeStates = set()
     unsureStates = set()
@@ -118,6 +119,10 @@ def logicBasedSearch(problem):
         print "Visiting", currentState
 
         if problem.isGoalState(currentState):
+            print "Yes, a teleporter!"
+            return problem.reconstructPath(visitedStates)
+        elif problem.isWumpus(currentState) or problem.isPoisonCapsule(currentState):
+            print "Oh no, I'm dead."
             return problem.reconstructPath(visitedStates)
 
         S = problem.isWumpusClose(currentState)
@@ -146,18 +151,33 @@ def logicBasedSearch(problem):
                     visitedStates.append(currentState)
                     return problem.reconstructPath(visitedStates)
                 elif O:
-                    if state not in safeStates:
+                    if state not in safeStatesContainer:
+                        if state in unsureStates:
+                            unsureStates.remove(state)
+                        safeStatesContainer.add(state)
                         safeStates.add(state)
                 elif W:
+                    if state in unsureStates:
+                        unsureStates.remove(state)
                     notSafeStates.add(state)
                     wumpusLocation = state
                 elif P:
+                    if state in unsureStates:
+                        unsureStates.remove(state)
                     notSafeStates.add(state)
                 else:
                     unsureStates.add(state)
 
-        currentState = minStateWeight(list(safeStates))
-        safeStates.remove(currentState)
+        if safeStatesContainer:
+            currentState = minStateWeight(list(safeStatesContainer))
+            safeStatesContainer.remove(currentState)
+        elif unsureStates:
+            currentState = minStateWeight(list(unsureStates))
+            unsureStates.remove(currentState)
+        else:
+            print "No place to go!"
+            return problem.reconstructPath(visitedStates)
+
         visitedStates.append(currentState)
 
 def checkConclusion(knowledgeForState, clauses, state, label):
