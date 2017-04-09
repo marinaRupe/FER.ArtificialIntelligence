@@ -1,5 +1,6 @@
 import util 
-import functools 
+import functools
+import copy
 
 class Labels:
     """
@@ -89,8 +90,8 @@ class Literal:
         """
         Overloading the str() operator - convert the object to a string
         """
-        if self.negative: return '~' + self.label
-        return self.label
+        if self.negative: return '~' + self.label + str(self.state)
+        return self.label + str(self.state)
 
     def __repr__(self):
         """
@@ -114,14 +115,14 @@ class Literal:
         """
         Check if a literal represents a deadly state
         """
-        return self.label in labels.DEADLY
+        return self.label in Labels.DEADLY
 
     def isWTP(self):
         """
         Check if a literal represents GhostWumpus, the Teleporter or 
         a poisoned pill
         """
-        return self.label in labels.WTP
+        return self.label in Labels.WTP
 
     def isSafe(self):
         """
@@ -209,6 +210,24 @@ class Clause:
         """
         return self.__str__()
 
+    def __key(self):
+        """
+        Return a unique key representing the literal at a given point
+        """
+        return tuple(sorted(list(self.literals)))
+
+    def __hash__(self):
+        """
+        Return the hash value - this operator overloads the hash(object) function.
+        """
+        return hash(self.__key())
+
+    def __eq__(first, second):
+        """
+        Check for equality - this operator overloads '=='
+        """
+        return first.__key() == second.__key()
+
 
 def resolution(clauses, goal):
     """
@@ -228,6 +247,41 @@ def resolution(clauses, goal):
     ###                              ###
     ####################################
     """
+    newClauses = set()
+    while True:
+        pairs = selectClauses(clauses, setOfSupport, resolvedPairs)
+
+        if not pairs:
+            return False
+
+        for pair in pairs:
+            c1, c2 = pair
+            resolvents = resolvePair(c1, c2)
+            resolvedPairs.add(pair)
+
+            # check for NIL
+            if not resolvents.literals:
+                return True
+
+            newClauses.add(resolvents)
+
+        setOfSupport = setOfSupport | newClauses
+
+        removeRedundant(clauses, setOfSupport)
+        removeTautologies(clauses, setOfSupport)
+
+
+def removeTautologies(clauses, setOfSupport):
+    for clause in (clauses | setOfSupport):
+
+        if clause.isResolveableWith(clause):
+            removedLiterals = set()
+            for literal in clause.literals:
+                if literal.negate() in clause.literals:
+                    removedLiterals.add(literal)
+
+            for literal in removedLiterals:
+                clause.literals.remove(literal)
 
 def removeRedundant(clauses, setOfSupport):
     """
@@ -241,7 +295,17 @@ def removeRedundant(clauses, setOfSupport):
     ###                              ###
     ####################################
     """
-    pass 
+    removedClauses = set()
+    allClauses = clauses | setOfSupport
+    for clause in allClauses:
+        if clause.isRedundant(allClauses):
+            removedClauses.add(clause)
+
+    for clause in removedClauses:
+        if clause in clauses:
+            clauses.remove(clause)
+        else:
+            setOfSupport.remove(clause)
 
 def resolvePair(firstClause, secondClause):
     """
@@ -252,7 +316,17 @@ def resolvePair(firstClause, secondClause):
     ###                              ###
     ####################################
     """
-    pass 
+
+    newClause = set()
+    sndClause = copy.deepcopy(secondClause.literals)
+    for literal in firstClause.literals:
+        if literal.negate() in secondClause.literals:
+            sndClause.remove(literal.negate())
+        else:
+            newClause.add(literal)
+
+    newClause = newClause | sndClause
+    return Clause(newClause)
 
 def selectClauses(clauses, setOfSupport, resolvedPairs):
     """
@@ -263,19 +337,28 @@ def selectClauses(clauses, setOfSupport, resolvedPairs):
     ###                              ###
     ####################################
     """
-    pass 
+    selectedPairs = set()
+    allClauses = clauses | setOfSupport
+    for sos in setOfSupport:
+        for clause in allClauses:
+            if clause != sos and clause.isResolveableWith(sos):
+                newPair = clause, sos
+                if newPair not in resolvedPairs:
+                    selectedPairs.add(newPair)
+
+    return selectedPairs
 
 def testResolution():
     """
     A sample of a resolution problem that should return True. 
     You should come up with your own tests in order to validate your code. 
     """
-    premise1 = Clause(set([Literal('a', (0, 0), True), Literal('b', (0, 0), False)]))
-    premise2 = Clause(set([Literal('b', (0, 0), True), Literal('c', (0, 0), False)]))
-    premise3 = Clause(Literal('a', (0,0)))
+    premise1 = Clause({Literal('a', (0, 0), True), Literal('b', (0, 0), False)})
+    premise2 = Clause({Literal('b', (0, 0), True), Literal('c', (0, 0), False)})
+    premise3 = Clause(Literal('a', (0, 0)))
 
     goal = Clause(Literal('c', (0,0)))
-    print resolution(set([premise1, premise2, premise3]), goal)
+    print resolution({premise1, premise2, premise3}, goal)
 
 if __name__ == '__main__':
     """

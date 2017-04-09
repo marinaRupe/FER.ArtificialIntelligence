@@ -99,6 +99,7 @@ def logicBasedSearch(problem):
     visitedStates = []
     startState = problem.getStartState()
     visitedStates.append(startState)
+
     """
     ####################################
     ###                              ###
@@ -106,6 +107,166 @@ def logicBasedSearch(problem):
     ###                              ###
     ####################################
     """
+    knowledgeBase = dict()
+    safeStates = set()
+    notSafeStates = set()
+    unsureStates = set()
+    currentState = startState
+    wumpusLocation = None
+
+    while True:
+        print "Visiting", currentState
+
+        if problem.isGoalState(currentState):
+            return problem.reconstructPath(visitedStates)
+
+        S = problem.isWumpusClose(currentState)
+        C = problem.isPoisonCapsuleClose(currentState)
+        G = problem.isTeleporterClose(currentState)
+        knowledgeBase.setdefault(currentState, {}).update({'S': S, 'C': C, 'G': G, 'O': True})
+
+        nextStates = [position(state) for state in problem.getSuccessors(currentState)]
+        for state in nextStates:
+            if (state not in visitedStates) and (state not in notSafeStates):
+                knowledgeForState = knowledgeBase.setdefault(state, {})
+
+                print "\n\tState:", state
+                clauses = getClauses(nextStates, currentState, knowledgeBase, wumpusLocation)
+
+                W = checkConclusion(knowledgeForState, clauses, state, 'W')
+                P = checkConclusion(knowledgeForState, clauses, state, 'P')
+                T = checkConclusion(knowledgeForState, clauses, state, 'T')
+                O = checkConclusion(knowledgeForState, clauses, state, 'O')
+
+                knowledgeForState.update({'W': W, 'P': P, 'T': T, 'O': O})
+                print "\t\tW: ", W, ", P: ", P, ", T: ", T, ", O: ", O
+
+                if T:
+                    currentState = state
+                    visitedStates.append(currentState)
+                    return problem.reconstructPath(visitedStates)
+                elif O:
+                    if state not in safeStates:
+                        safeStates.add(state)
+                elif W:
+                    notSafeStates.add(state)
+                    wumpusLocation = state
+                elif P:
+                    notSafeStates.add(state)
+                else:
+                    unsureStates.add(state)
+
+        currentState = minStateWeight(list(safeStates))
+        safeStates.remove(currentState)
+        visitedStates.append(currentState)
+
+def checkConclusion(knowledgeForState, clauses, state, label):
+    conclusion = knowledgeForState.get(label, None)
+
+    if conclusion is not None:
+        return conclusion
+    else:
+        conclusion = resolution(clauses, Clause(Literal(label, state, False)))
+        if conclusion:
+            return conclusion
+        # check if it's false or not sure
+        elif conclusion != resolution(clauses, Clause(Literal(label, state, True))):
+            return conclusion
+        else:
+            return None
+
+
+def position(state):
+    return state[0]
+
+def direction(state):
+    return state[1]
+
+def minStateWeight(states):
+    minState = states[0]
+    min = stateWeight(states[0])
+    for state in states[1:]:
+        if stateWeight(state) < min:
+            min = stateWeight(state)
+            minState = state
+
+    return minState
+
+def getClauses(nextStates, currentState, knowledgeBase, wumpusLocation):
+    S = knowledgeBase.setdefault(currentState, {}).get('S', None)
+    C = knowledgeBase.setdefault(currentState, {}).get('C', None)
+    G = knowledgeBase.setdefault(currentState, {}).get('G', None)
+
+    print "\t\tSensed S: ", S
+    print "\t\tSensed C: ", C
+    print "\t\tSensed G: ", G
+
+    WClauses = set()
+    if S:
+        literals = set()
+        for state in nextStates:
+            W = knowledgeBase.setdefault(state, {}).get('W', None)
+            if W is not None:
+                WClauses.add(Clause({Literal('W', state, not W)}))
+            else:
+                if wumpusLocation is not None:
+                    WClauses.add(Clause({Literal('W', state, not (state == wumpusLocation))}))
+                else:
+                    literals.add(Literal('W', state, False))
+
+        WClauses.add(Clause(literals))
+    else:
+        for state in nextStates:
+            WClauses.add(Clause({Literal('W', state, True)}))
+            knowledgeBase.setdefault(state, {}).update({'W': False})
+
+    PClauses = set()
+    if C:
+        literals = set()
+        for state in nextStates:
+            P = knowledgeBase.setdefault(state, {}).get('P', None)
+            if P is not None:
+                PClauses.add(Clause({Literal('P', state, not P)}))
+            else:
+                literals.add(Literal('P', state, False))
+        PClauses.add(Clause(literals))
+    else:
+        for state in nextStates:
+            PClauses.add(Clause({Literal('P', state, True)}))
+            knowledgeBase.setdefault(state, {}).update({'P': False})
+
+    TClauses = set()
+    if G:
+        literals = set()
+        for state in nextStates:
+            literals.add(Literal('T', state, False))
+        TClauses.add(Clause(literals))
+    else:
+        for state in nextStates:
+            TClauses.add(Clause({Literal('T', state, True)}))
+            knowledgeBase.setdefault(state, {}).update({'T': False})
+
+    OClauses = set()
+    if not C and not S:
+        for state in nextStates:
+            OClauses.add(Clause({Literal('O', state, False)}))
+            knowledgeBase.setdefault(state, {}).update({'O': True})
+
+    for state in nextStates:
+        W = knowledgeBase.setdefault(state, {}).get('W', None)
+        P = knowledgeBase.setdefault(state, {}).get('P', None)
+
+        if W or P:
+            OClauses.add(Clause({Literal('O', state, True)}))
+            knowledgeBase.setdefault(state, {}).update({'O': False})
+
+        elif (W is not None) and (P is not None) and (not W) and (not P):
+            OClauses.add(Clause({Literal('O', state, False)}))
+            knowledgeBase.setdefault(state, {}).update({'O': True})
+
+    clauses = WClauses | PClauses | TClauses | OClauses
+    print '\t\t', clauses
+    return clauses
 
 ####################################
 ###                              ###
