@@ -13,3 +13,7 @@ Link to a course site: http://www.fer.unizg.hr/en/course/artint
 ### 2nd laboratory exercise
 * refutation resolution
 * task: fill in the missing parts of code to help Pacard reach his goal
+
+### 3rd laboratory exercise
+* naive Bayes Classifier
+* reinforcement learning
