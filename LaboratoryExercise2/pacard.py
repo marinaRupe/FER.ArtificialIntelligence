@@ -172,8 +172,40 @@ def logicBasedSearch(problem):
             currentState = minStateWeight(list(safeStatesContainer))
             safeStatesContainer.remove(currentState)
         elif unsureStates:
-            currentState = minStateWeight(list(unsureStates))
-            unsureStates.remove(currentState)
+            found = False
+            unsure = set()
+            state = None
+            while unsureStates and not found:
+                state = minStateWeight(list(unsureStates))
+                unsureStates.remove(state)
+
+                W = knowledgeBase.setdefault(state, {}).get('W', None)
+                P = knowledgeBase.setdefault(state, {}).get('P', None)
+                T = knowledgeBase.setdefault(state, {}).get('T', None)
+                O = knowledgeBase.setdefault(state, {}).get('O', None)
+                # print "\t\t", state, "W: ", W, ", P: ", P, ", T: ", T, ", O: ", O
+
+                if W or P:
+                    continue
+
+                if O:
+                    found = True
+                elif not W and not P:
+                    if (W is not None) and (P is not None):
+                        found = True
+                    else:
+                        unsure.add(state)
+
+            unsureStates = unsureStates | unsure
+            if found:
+                currentState = state
+            elif unsureStates:
+                currentState = minStateWeight(list(unsureStates))
+                unsureStates.remove(currentState)
+            else:
+                print "No place to go!"
+                return problem.reconstructPath(visitedStates)
+
         else:
             print "No place to go!"
             return problem.reconstructPath(visitedStates)

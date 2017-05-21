@@ -247,13 +247,16 @@ def resolution(clauses, goal):
     ###                              ###
     ####################################
     """
-    newClauses = set()
     while True:
+        removeRedundant(clauses, setOfSupport)
+        removeTautologies(clauses, setOfSupport)
+
         pairs = selectClauses(clauses, setOfSupport, resolvedPairs)
 
         if not pairs:
             return False
 
+        newClauses = set()
         for pair in pairs:
             c1, c2 = pair
             resolvents = resolvePair(c1, c2)
@@ -267,21 +270,19 @@ def resolution(clauses, goal):
 
         setOfSupport = setOfSupport | newClauses
 
-        removeRedundant(clauses, setOfSupport)
-        removeTautologies(clauses, setOfSupport)
-
-
 def removeTautologies(clauses, setOfSupport):
+    removedClauses = set()
     for clause in (clauses | setOfSupport):
-
         if clause.isResolveableWith(clause):
-            removedLiterals = set()
             for literal in clause.literals:
                 if literal.negate() in clause.literals:
-                    removedLiterals.add(literal)
+                    removedClauses.add(clauses)
 
-            for literal in removedLiterals:
-                clause.literals.remove(literal)
+    for clause in removedClauses:
+        if clause in clauses:
+            clauses.remove(clause)
+        else:
+            setOfSupport.remove(clause)
 
 def removeRedundant(clauses, setOfSupport):
     """
